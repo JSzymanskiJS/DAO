@@ -7,6 +7,7 @@ describe("Test Governor", function () {
     let owner;
     let addr1;
     let addr2;
+    let addr3;
     let addrs;
 
     let enumVote = {
@@ -27,7 +28,8 @@ describe("Test Governor", function () {
         "_createProposal_4",
         "vote_1",
         "vote_2",
-        "vote_3"
+        "vote_3",
+        "vote_4"
     ];
     let errors = [
         " | _createProposal() function | Error message: 'Only legislator can create a proposal.'",
@@ -36,7 +38,8 @@ describe("Test Governor", function () {
         " | _createProposal() function | Error message: 'Start of voting period has to be before end of the voting period.'",
         " | vote() function | Error message: 'You have already voted.'",
         " | vote() function | Error message: 'Voting period has not started yet.'",
-        " | vote() function | Error message: 'Voting period is over.'"
+        " | vote() function | Error message: 'Voting period is over.'",
+        " | vote() function | Error message: 'Address is not whitelisted.'"
     ];
 
     beforeEach(async () => {
@@ -44,7 +47,7 @@ describe("Test Governor", function () {
         wETH = await WETH.deploy("Wrapped Ether", "WETH");
         await wETH.deployed();
 
-        [owner, addr1, addr2, ...addrs] = await ethers.getSigners();
+        [owner, addr1, addr2, addr3, ...addrs] = await ethers.getSigners();
 
         await wETH.connect(owner).deposit({ value: ETHER[10] });
         await wETH.connect(addr1).deposit({ value: ETHER[25] });
@@ -157,7 +160,7 @@ describe("Test Governor", function () {
     });
 
     describe("Test vote()", function () {
-        it("PASS", async () => {
+        it("PASS - whitelist off (default)", async () => {
             date = Math.floor(Date.now() / 1000);
             createProposal_Tx = await governor.connect(owner).createProposal(
                 ETHER[15],
@@ -182,7 +185,65 @@ describe("Test Governor", function () {
             expect(proposal.result).to.equal(enumResult["REJECTED"]);
         });
 
-        it("FAIL - Attempt to vote again ", async () => {
+        it("PASS - whitelist on", async () => {
+            expect(await governor.connect(owner).isWhitelistOn()).to.equal(false);
+
+            date = Math.floor(Date.now() / 1000);
+            createProposal_Tx = await governor.connect(owner).createProposal(
+                ETHER[15],
+                date,
+                date + 100,
+                70,
+                30
+            );
+
+            turnOnWhitelist_Tx = await governor.connect(owner).negateWhitelist();
+            expect(await governor.connect(owner).isWhitelistOn()).to.equal(true);
+
+            whitelistAddr1_Tx = await governor.connect(owner).setWhitelistedAddress(addr1.address);
+            whitelistAddr2_Tx = await governor.connect(owner).setWhitelistedAddress(addr2.address);
+            voteOwner_Tx = await governor.connect(owner).vote(1, enumVote["ABSTAIN"]);
+            proposal = await governor.idToProposal(1);
+            expect(proposal.abstainVotes).to.equal(ETHER[10]);
+            expect(proposal.result).to.equal(enumResult["NOT_RESOLVED"]);
+
+            voteAddr2_Tx = await governor.connect(addr2).vote(1, enumVote["ACCEPT"]);
+            proposal = await governor.idToProposal(1);
+            expect(proposal.acceptedVotes).to.equal(ETHER[50]);
+            expect(proposal.result).to.equal(enumResult["ACCEPTED"]);
+
+            deposit_Tx = await wETH.connect(addr1).deposit({ value: ETHER[70] })
+            voteAddr1_Tx = await governor.connect(addr1).vote(1, enumVote["AGAINST"]);
+            proposal = await governor.idToProposal(1);
+            expect(proposal.result).to.equal(enumResult["REJECTED"]);
+        });
+
+        it("FAIL - whitelist on", async () => {
+            expect(await governor.connect(owner).isWhitelistOn()).to.equal(false);
+
+            date = Math.floor(Date.now() / 1000);
+            createProposal_Tx = await governor.connect(owner).createProposal(
+                ETHER[15],
+                date,
+                date + 100,
+                70,
+                30
+            );
+
+            turnOnWhitelist_Tx = await governor.connect(owner).negateWhitelist();
+            expect(await governor.connect(owner).isWhitelistOn()).to.equal(true);
+
+            whitelistAddr1_Tx = await governor.connect(owner).setWhitelistedAddress(addr1.address);
+            voteOwner_Tx = await governor.connect(owner).vote(1, enumVote["ABSTAIN"]);
+            proposal = await governor.idToProposal(1);
+            expect(proposal.abstainVotes).to.equal(ETHER[10]);
+            expect(proposal.result).to.equal(enumResult["NOT_RESOLVED"]);
+
+            let errorMessage = "Governor at: " + String(governor.address).toLowerCase() + errors[7];
+            await expect(governor.connect(addr2).vote(1, enumVote["ACCEPT"])).to.be.revertedWith(errorMessage);
+        });
+
+        it("FAIL - Attempt to vote again", async () => {
             date = Math.floor(Date.now() / 1000);
             createProposal_Tx = await governor.connect(owner).createProposal(
                 ETHER[10],

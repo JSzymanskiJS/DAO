@@ -17,16 +17,20 @@ contract Governor {
     //Constants
     //----------------------------------
     //Variables
+    bool public isWhitelistOn;
     address public legislator;
     Counters.Counter private _proposalCounter;
     mapping(uint256 => Proposal) public idToProposal;
     mapping(address => mapping(uint256 => Vote)) public addressToVote;
-    mapping(address => mapping(uint256 => bool)) public addressToisVoted;
+    mapping(address => mapping(uint256 => bool)) public addressToIsVoted;
+    mapping(address => bool) public addressToIsWhitelisted;
     //Error declaration
     string private _governorAddressString;
     mapping(string => string) public errorMessage;
 
     constructor(address administrator_, address votesAddress) {
+        //Variables definition
+        addressToIsWhitelisted[msg.sender] = true;
         //Actors definition
         iVotes = IERC20(votesAddress);
         legislator = administrator_;
@@ -66,6 +70,10 @@ contract Governor {
             _governorAddressString,
             " | vote() function | Error message: 'Voting period is over.'"
         );
+        errorMessage["vote_4"] = StringManipulation.concatenate(
+            _governorAddressString,
+            " | vote() function | Error message: 'Address is not whitelisted.'"
+        );
     }
 
     modifier onlyLegislator() {
@@ -76,6 +84,29 @@ contract Governor {
     modifier timestampValidator(uint256 start, uint256 end) {
         require(start < end, errorMessage["_createProposal_4"]);
         _;
+    }
+
+    function setWhitelistedAddress(address newbie)
+        external
+        onlyLegislator
+        returns (bool)
+    {
+        addressToIsWhitelisted[newbie] = true;
+        return true;
+    }
+
+    function resetWhitelistedAddress(address looser)
+        external
+        onlyLegislator
+        returns (bool)
+    {
+        addressToIsWhitelisted[looser] = false;
+        return true;
+    }
+
+    function negateWhitelist() external onlyLegislator returns (bool) {
+        isWhitelistOn = !isWhitelistOn;
+        return true;
     }
 
     function createProposal(
@@ -115,7 +146,7 @@ contract Governor {
 
     function vote(uint256 proposalId_, Vote vote_) external returns (bool) {
         require(
-            !addressToisVoted[msg.sender][proposalId_],
+            !addressToIsVoted[msg.sender][proposalId_],
             errorMessage["vote_1"]
         );
         require(
@@ -126,7 +157,11 @@ contract Governor {
             block.timestamp <= idToProposal[proposalId_].endTimestamp,
             errorMessage["vote_3"]
         );
-        addressToisVoted[msg.sender][proposalId_] = true;
+        if (isWhitelistOn) {
+            require(addressToIsWhitelisted[msg.sender], errorMessage["vote_4"]);
+        }
+
+        addressToIsVoted[msg.sender][proposalId_] = true;
 
         uint256 votesAmount = iVotes.balanceOf(msg.sender);
 
