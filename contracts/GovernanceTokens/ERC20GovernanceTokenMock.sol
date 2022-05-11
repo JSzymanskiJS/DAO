@@ -7,17 +7,26 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 /// @title GovernanceTokenMock
 /// @author Jakub Szymański
 /// @notice This is simple mock for testing purposes.
-/// @dev This is the simplest implementation of Wrapped Ethereum.
-contract ERC20GovernanceTokenMock is IERC20Metadata, ERC20 {
+/// @dev This is implementation of Wrapped Ethereum.
+contract ERC20GovernanceTokenMock is ERC20 {
     constructor(string memory name_, string memory symbol_)
         ERC20(name_, symbol_)
     {}
+
+    fallback() external payable {
+        deposit();
+    }
+
+    receive() external payable {
+        deposit();
+    }
 
     function deposit() public payable {
         _mint(msg.sender, msg.value);
     }
 
-    function burn(uint256 amount) public {
+    function withdraw(uint256 amount) public {
         _burn(msg.sender, amount);
+        payable(msg.sender).transfer(amount);
     }
 }

@@ -5,16 +5,24 @@ struct Proposal {
     uint256 proposalId;
     uint256 minVotesAmount;
     uint256 minPassPercentage;
+    uint256 maxRejectedPercentage;
     uint256 startTimestamp;
     uint256 endTimestamp;
-    uint256 forVotes;
+    uint256 acceptedVotes;
+    uint256 againstVotes;
+    uint256 abstainVotes;
+    Result result;
+}
+
+struct Summary {
+    uint256 acceptedVotes;
     uint256 againstVotes;
     uint256 abstainVotes;
     Result result;
 }
 
 enum Vote {
-    FOR,
+    ACCEPTED,
     AGAINST,
     ABSTAIN
 }
